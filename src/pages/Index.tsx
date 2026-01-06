@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import Icon from '@/components/ui/icon';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import Auth from './Auth';
 
 interface Message {
   id: number;
@@ -29,9 +30,34 @@ interface Chat {
 }
 
 const Index = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState('');
   const [selectedChat, setSelectedChat] = useState<number>(1);
   const [messageText, setMessageText] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+  useEffect(() => {
+    const username = localStorage.getItem('username');
+    if (username) {
+      setCurrentUser(username);
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleAuth = (username: string) => {
+    setCurrentUser(username);
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('username');
+    setIsAuthenticated(false);
+    setCurrentUser('');
+  };
+
+  if (!isAuthenticated) {
+    return <Auth onAuth={handleAuth} />;
+  }
 
   const chats: Chat[] = [
     { id: 1, name: 'Анна Петрова', avatar: '👩‍💼', lastMessage: 'Отлично, встретимся завтра!', time: '14:32', unread: 2, online: true },
@@ -59,15 +85,19 @@ const Index = () => {
 
   return (
     <div className="flex h-screen bg-background">
-      <div className="w-80 border-r border-border flex flex-col glass-effect">
-        <div className="p-4 border-b border-border">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Messenger
-            </h1>
-            <div className="flex gap-2">
-              <Button variant="ghost" size="icon" className="hover:bg-white/5">
-                <Icon name="Settings" size={20} />
+      <div className="w-80 border-r border-border flex flex-col">
+        <div className="p-3 border-b border-border bg-card">
+          <div className="flex items-center justify-between mb-3">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hover:bg-muted"
+            >
+              <Icon name="Menu" size={24} />
+            </Button>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" className="hover:bg-muted">
+                <Icon name="Search" size={20} />
               </Button>
               <Sheet>
                 <SheetTrigger asChild>
@@ -87,8 +117,8 @@ const Index = () => {
                         </AvatarFallback>
                       </Avatar>
                       <div className="text-center">
-                        <h3 className="text-xl font-semibold">Вы</h3>
-                        <p className="text-sm text-muted-foreground">@username</p>
+                        <h3 className="text-xl font-semibold">{currentUser}</h3>
+                        <p className="text-sm text-muted-foreground">@{currentUser.toLowerCase().replace(/\s+/g, '')}</p>
                       </div>
                       <Badge className="gradient-primary border-0">
                         <Icon name="Check" size={12} className="mr-1" />
@@ -135,47 +165,51 @@ const Index = () => {
                     <Button className="w-full gradient-primary border-0 hover:opacity-90 transition-opacity">
                       Сохранить изменения
                     </Button>
+
+                    <Button 
+                      onClick={handleLogout}
+                      variant="outline" 
+                      className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
+                    >
+                      <Icon name="LogOut" size={18} className="mr-2" />
+                      Выйти из аккаунта
+                    </Button>
                   </div>
                 </SheetContent>
               </Sheet>
             </div>
           </div>
-          <div className="relative">
-            <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input 
-              placeholder="Поиск чатов..." 
-              className="pl-10 glass-effect border-white/10 focus:border-primary/50"
-            />
-          </div>
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div className="space-y-0">
             {chats.map((chat) => (
               <button
                 key={chat.id}
                 onClick={() => setSelectedChat(chat.id)}
-                className={`w-full p-3 rounded-xl flex items-center gap-3 transition-all hover:bg-white/5 ${
-                  selectedChat === chat.id ? 'bg-white/10 glass-effect' : ''
+                className={`w-full p-3 flex items-center gap-3 transition-all hover:bg-muted border-b border-border ${
+                  selectedChat === chat.id ? 'bg-primary/10' : ''
                 }`}
               >
-                <div className="relative">
-                  <Avatar className="w-12 h-12 ring-2 ring-white/10">
+                <div className="relative flex-shrink-0">
+                  <Avatar className="w-12 h-12">
                     <AvatarFallback className="text-xl">{chat.avatar}</AvatarFallback>
                   </Avatar>
                   {chat.online && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full ring-2 ring-background"></div>
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full ring-2 ring-card"></div>
                   )}
                 </div>
-                <div className="flex-1 text-left">
-                  <div className="flex justify-between items-center mb-1">
-                    <h3 className="font-semibold text-sm">{chat.name}</h3>
-                    <span className="text-xs text-muted-foreground">{chat.time}</span>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <h3 className="font-medium text-sm truncate flex-1">{chat.name}</h3>
+                    <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground">{chat.time}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center gap-2">
                     <p className="text-sm text-muted-foreground truncate flex-1">{chat.lastMessage}</p>
                     {chat.unread && (
-                      <Badge className="ml-2 gradient-accent border-0 h-5 min-w-5 flex items-center justify-center text-xs">
+                      <Badge className="bg-primary text-primary-foreground border-0 h-5 min-w-5 px-1.5 flex items-center justify-center text-xs rounded-full flex-shrink-0">
                         {chat.unread}
                       </Badge>
                     )}
