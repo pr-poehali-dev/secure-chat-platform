@@ -38,7 +38,7 @@ export default function Auth({ onAuth }: AuthProps) {
             <Icon name="MessageCircle" size={40} className="text-white" />
           </div>
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Messenger
+            Freky
           </h1>
           <p className="text-muted-foreground">
             {isLogin ? 'Добро пожаловать!' : 'Создайте аккаунт'}

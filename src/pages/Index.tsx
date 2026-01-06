@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,15 +8,25 @@ import Icon from '@/components/ui/icon';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import EmojiPicker, { EmojiClickData } from 'emoji-picker-react';
 import Auth from './Auth';
 
 interface Message {
   id: number;
-  text: string;
+  text?: string;
   time: string;
   isMine: boolean;
   isRead?: boolean;
   replyTo?: string;
+  file?: {
+    name: string;
+    type: 'image' | 'video' | 'file';
+    url: string;
+    size?: string;
+  };
 }
 
 interface Chat {
@@ -27,22 +37,49 @@ interface Chat {
   time: string;
   unread?: number;
   online?: boolean;
+  isGroup?: boolean;
+  members?: number;
 }
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState('');
+  const [userBio, setUserBio] = useState('Доступен для общения');
   const [selectedChat, setSelectedChat] = useState<number>(1);
   const [messageText, setMessageText] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const username = localStorage.getItem('username');
+    const savedBio = localStorage.getItem('userBio');
     if (username) {
       setCurrentUser(username);
       setIsAuthenticated(true);
     }
-  }, []);
+    if (savedBio) {
+      setUserBio(savedBio);
+    }
+
+    const savedMessages = localStorage.getItem(`messages_${selectedChat}`);
+    if (savedMessages) {
+      setMessages(JSON.parse(savedMessages));
+    } else {
+      setMessages([
+        { id: 1, text: 'Привет! Как дела с новым проектом?', time: '14:20', isMine: false },
+        { id: 2, text: 'Отлично! Уже закончил дизайн', time: '14:22', isMine: true, isRead: true },
+        { id: 3, text: 'Можешь показать результат?', time: '14:25', isMine: false },
+      ]);
+    }
+  }, [selectedChat]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const handleAuth = (username: string) => {
     setCurrentUser(username);
@@ -61,25 +98,71 @@ const Index = () => {
 
   const chats: Chat[] = [
     { id: 1, name: 'Анна Петрова', avatar: '👩‍💼', lastMessage: 'Отлично, встретимся завтра!', time: '14:32', unread: 2, online: true },
-    { id: 2, name: 'Дизайн-команда', avatar: '🎨', lastMessage: 'Макеты готовы к ревью', time: '13:15', unread: 5 },
+    { id: 2, name: 'Дизайн-команда', avatar: '🎨', lastMessage: 'Макеты готовы к ревью', time: '13:15', unread: 5, isGroup: true, members: 12 },
     { id: 3, name: 'Максим Волков', avatar: '👨‍💻', lastMessage: 'Код отправил на проверку', time: '12:45', online: true },
-    { id: 4, name: 'Маркетинг', avatar: '📊', lastMessage: 'Статистика за неделю внутри', time: '11:20' },
+    { id: 4, name: 'Маркетинг', avatar: '📊', lastMessage: 'Статистика за неделю внутри', time: '11:20', isGroup: true, members: 8 },
     { id: 5, name: 'София Иванова', avatar: '👩‍🎨', lastMessage: 'Спасибо за фидбек! 🙏', time: 'Вчера' },
-  ];
-
-  const messages: Message[] = [
-    { id: 1, text: 'Привет! Как дела с новым проектом?', time: '14:20', isMine: false },
-    { id: 2, text: 'Отлично! Уже закончил дизайн', time: '14:22', isMine: true, isRead: true },
-    { id: 3, text: 'Можешь показать результат?', time: '14:25', isMine: false },
-    { id: 4, text: 'Конечно, отправлю через минуту', time: '14:26', isMine: true, isRead: true },
-    { id: 5, text: 'Когда встретимся обсудить детали?', time: '14:30', isMine: false },
-    { id: 6, text: 'Отлично, встретимся завтра!', time: '14:32', isMine: true, isRead: false, replyTo: 'Когда встретимся обсудить детали?' },
   ];
 
   const handleSendMessage = () => {
     if (messageText.trim()) {
+      const newMessage: Message = {
+        id: messages.length + 1,
+        text: messageText,
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        isMine: true,
+        isRead: false,
+        replyTo: replyingTo?.text,
+      };
+      
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+      localStorage.setItem(`messages_${selectedChat}`, JSON.stringify(updatedMessages));
       setMessageText('');
       setReplyingTo(null);
+    }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageText(prev => prev + emojiData.emoji);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const fileUrl = URL.createObjectURL(file);
+      const fileType = file.type.startsWith('image/') ? 'image' : 
+                       file.type.startsWith('video/') ? 'video' : 'file';
+      
+      const newMessage: Message = {
+        id: messages.length + 1,
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        isMine: true,
+        isRead: false,
+        file: {
+          name: file.name,
+          type: fileType,
+          url: fileUrl,
+          size: (file.size / 1024).toFixed(1) + ' KB'
+        }
+      };
+      
+      const updatedMessages = [...messages, newMessage];
+      setMessages(updatedMessages);
+      localStorage.setItem(`messages_${selectedChat}`, JSON.stringify(updatedMessages));
+    }
+  };
+
+  const handleSaveBio = () => {
+    localStorage.setItem('userBio', userBio);
+  };
+
+  const handleCall = (isVideo: boolean) => {
+    if (phoneNumber.trim()) {
+      alert(`${isVideo ? 'Видеозвонок' : 'Звонок'} на номер: ${phoneNumber}`);
+      setPhoneNumber('');
+    } else {
+      alert('Введите номер телефона контакта');
     }
   };
 
@@ -88,17 +171,30 @@ const Index = () => {
       <div className="w-80 border-r border-border flex flex-col">
         <div className="p-3 border-b border-border bg-card">
           <div className="flex items-center justify-between mb-3">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="hover:bg-muted"
-            >
-              <Icon name="Menu" size={24} />
-            </Button>
+            <h1 className="text-xl font-bold text-primary">Freky</h1>
             <div className="flex gap-1">
-              <Button variant="ghost" size="icon" className="hover:bg-muted">
-                <Icon name="Search" size={20} />
+              <Button variant="ghost" size="icon" className="hover:bg-muted h-9 w-9">
+                <Icon name="Search" size={18} />
               </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="hover:bg-muted h-9 w-9">
+                    <Icon name="UserPlus" size={18} />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="glass-effect border-white/10">
+                  <DialogHeader>
+                    <DialogTitle>Новый чат</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <Input placeholder="Поиск контактов..." className="glass-effect" />
+                    <Button className="w-full gradient-primary border-0">
+                      <Icon name="Users" size={18} className="mr-2" />
+                      Создать группу
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="hover:bg-white/5">
@@ -138,10 +234,11 @@ const Index = () => {
                       
                       <div>
                         <Label className="text-sm font-medium mb-2 block">О себе</Label>
-                        <Input 
+                        <Textarea 
                           placeholder="Расскажите о себе..." 
-                          className="glass-effect border-white/10"
-                          defaultValue="Люблю создавать классные штуки"
+                          className="glass-effect border-white/10 min-h-20"
+                          value={userBio}
+                          onChange={(e) => setUserBio(e.target.value)}
                         />
                       </div>
                     </div>
@@ -162,9 +259,43 @@ const Index = () => {
                       </div>
                     </div>
 
-                    <Button className="w-full gradient-primary border-0 hover:opacity-90 transition-opacity">
+                    <Button 
+                      onClick={handleSaveBio}
+                      className="w-full gradient-primary border-0 hover:opacity-90 transition-opacity"
+                    >
                       Сохранить изменения
                     </Button>
+
+                    <div className="space-y-4 pt-4 border-t border-border">
+                      <h4 className="font-semibold">Звонки</h4>
+                      <div className="space-y-2">
+                        <Label>Номер телефона для звонков</Label>
+                        <Input 
+                          placeholder="+7 (999) 123-45-67"
+                          value={phoneNumber}
+                          onChange={(e) => setPhoneNumber(e.target.value)}
+                          className="glass-effect"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button 
+                          onClick={() => handleCall(false)}
+                          variant="outline"
+                          className="glass-effect"
+                        >
+                          <Icon name="Phone" size={16} className="mr-2" />
+                          Позвонить
+                        </Button>
+                        <Button 
+                          onClick={() => handleCall(true)}
+                          variant="outline"
+                          className="glass-effect"
+                        >
+                          <Icon name="Video" size={16} className="mr-2" />
+                          Видео
+                        </Button>
+                      </div>
+                    </div>
 
                     <Button 
                       onClick={handleLogout}
@@ -207,7 +338,12 @@ const Index = () => {
                     </div>
                   </div>
                   <div className="flex justify-between items-center gap-2">
-                    <p className="text-sm text-muted-foreground truncate flex-1">{chat.lastMessage}</p>
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      {chat.isGroup && (
+                        <Icon name="Users" size={12} className="text-muted-foreground flex-shrink-0" />
+                      )}
+                      <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
+                    </div>
                     {chat.unread && (
                       <Badge className="bg-primary text-primary-foreground border-0 h-5 min-w-5 px-1.5 flex items-center justify-center text-xs rounded-full flex-shrink-0">
                         {chat.unread}
@@ -268,7 +404,36 @@ const Index = () => {
                         : 'glass-effect rounded-2xl rounded-bl-md'
                     } group relative`}
                   >
-                    <p className="text-sm">{message.text}</p>
+                    {message.file ? (
+                      <div className="space-y-2">
+                        {message.file.type === 'image' && (
+                          <img 
+                            src={message.file.url} 
+                            alt={message.file.name}
+                            className="rounded-lg max-w-xs"
+                          />
+                        )}
+                        {message.file.type === 'video' && (
+                          <video 
+                            src={message.file.url} 
+                            controls
+                            className="rounded-lg max-w-xs"
+                          />
+                        )}
+                        {message.file.type === 'file' && (
+                          <div className="flex items-center gap-3 p-3 bg-white/5 rounded-lg">
+                            <Icon name="FileText" size={32} className="text-primary" />
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{message.file.name}</p>
+                              <p className="text-xs text-muted-foreground">{message.file.size}</p>
+                            </div>
+                            <Icon name="Download" size={20} />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-sm">{message.text}</p>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-xs opacity-70">{message.time}</span>
                       {message.isMine && (
@@ -291,6 +456,7 @@ const Index = () => {
                 </div>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
 
@@ -312,7 +478,19 @@ const Index = () => {
             </div>
           )}
           <div className="flex gap-2 items-end">
-            <Button variant="ghost" size="icon" className="hover:bg-white/5 flex-shrink-0">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="image/*,video/*,.pdf,.doc,.docx,.txt"
+            />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hover:bg-white/5 flex-shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+            >
               <Icon name="Paperclip" size={20} />
             </Button>
             <div className="flex-1 glass-effect rounded-2xl border border-white/10 flex items-end">
@@ -320,12 +498,29 @@ const Index = () => {
                 placeholder="Написать сообщение..."
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
                 className="border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
               />
-              <Button variant="ghost" size="icon" className="hover:bg-transparent flex-shrink-0">
-                <Icon name="Smile" size={20} />
-              </Button>
+              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="hover:bg-transparent flex-shrink-0">
+                    <Icon name="Smile" size={20} />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent 
+                  className="w-auto p-0 border-0" 
+                  side="top" 
+                  align="end"
+                >
+                  <EmojiPicker 
+                    onEmojiClick={handleEmojiClick}
+                    theme="dark"
+                    searchPlaceHolder="Поиск эмодзи..."
+                    width={350}
+                    height={400}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <Button 
               size="icon" 
